@@ -1,0 +1,6 @@
+port = ""
+hint = "Curiosity"
+baud = 9600
+ack_timeout = 0.75
+dedupe_ms = 100
+log_level = "INFO"
