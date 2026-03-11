@@ -16,7 +16,7 @@ def test_defaults_without_config(tmp_path: Path) -> None:
     settings = load_settings(cwd=tmp_path, system="Linux", env={}, home=tmp_path)
     assert settings.port is None
     assert settings.hint is None
-    assert settings.baud == 9600
+    assert settings.baud == 115200
     assert settings.ack_timeout == 0.75
     assert settings.dedupe_ms == 100
     assert settings.log_level == "INFO"

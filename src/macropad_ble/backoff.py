@@ -16,12 +16,19 @@ class ExponentialBackoff:
     jitter_high: float = 1.2
     random_fn: Callable[[float, float], float] = field(default=random.uniform)
     _attempt: int = field(default=0, init=False, repr=False)
+    _base_delay: float = field(default=0.0, init=False, repr=False)
 
     def next_delay(self) -> float:
-        base = min(self.initial * (self.factor**self._attempt), self.max_delay)
+        if self._attempt == 0:
+            base = min(max(0.0, self.initial), self.max_delay)
+        else:
+            grown = max(0.0, self._base_delay * self.factor)
+            base = min(grown, self.max_delay)
+        self._base_delay = base
         self._attempt += 1
         multiplier = self.random_fn(self.jitter_low, self.jitter_high)
         return max(0.0, base * multiplier)
 
     def reset(self) -> None:
         self._attempt = 0
+        self._base_delay = 0.0

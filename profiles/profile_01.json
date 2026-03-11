@@ -1,0 +1,152 @@
+{
+  "bindings": {
+    "0,0": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,0",
+      "script_code": "# Macropad runtime script for key 0,0\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "0,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,1",
+      "script_code": "# Macropad runtime script for key 0,1\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "0,2": {
+      "action": {
+        "kind": "python",
+        "steps": [],
+        "value": "profiles/runtime_python/toggle_spotify_session.py"
+      },
+      "label": "Key 0,2",
+      "script_code": "# Macropad runtime script for key 0,2\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "0,3": {
+      "action": {
+        "kind": "python",
+        "steps": [],
+        "value": "profiles/runtime_python/toggle_opera_gx_session.py"
+      },
+      "label": "Key 0,3",
+      "script_code": "# Macropad runtime script for key 0,3\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "1,0": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 1,0",
+      "script_code": "# Macropad runtime script for key 1,0\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "1,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": "space"
+      },
+      "label": "Key 1,1",
+      "script_code": "# Macropad runtime script for key 1,1\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "1,2": {
+      "action": {
+        "kind": "keyboard",
+        "steps": [],
+        "value": "media previous track"
+      },
+      "label": "Key 1,2",
+      "script_code": "# Macropad runtime script for key 1,2\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "1,3": {
+      "action": {
+        "kind": "keyboard",
+        "steps": [],
+        "value": "media next track"
+      },
+      "label": "Key 1,3",
+      "script_code": "# Macropad runtime script for key 1,3\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "2,0": {
+      "action": {
+        "kind": "keyboard",
+        "steps": [],
+        "value": "print screen"
+      },
+      "label": "Key 2,0",
+      "script_code": "# Macropad runtime script for key 2,0\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "2,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 2,1",
+      "script_code": "# Macropad runtime script for key 2,1\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "2,2": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": "space"
+      },
+      "label": "Key 2,2",
+      "script_code": "# Macropad runtime script for key 2,2\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    },
+    "2,3": {
+      "action": {
+        "kind": "change_profile",
+        "steps": [],
+        "value": "mode=next;step=1;min=1;max=4"
+      },
+      "label": "Key 2,3",
+      "script_code": "# Macropad runtime script for key 2,3\n# Runs on key-down.\n# Available variables: key, row, col, pressed, timestamp\nif pressed:\n    pass",
+      "script_mode": "python"
+    }
+  },
+  "description": "|{spotify_track}|{spotify_artist}",
+  "encoder_actions": {
+    "down": {
+      "kind": "keyboard",
+      "steps": [],
+      "value": "volume up"
+    },
+    "sw_down": {
+      "kind": "none",
+      "steps": [],
+      "value": ""
+    },
+    "sw_up": {
+      "kind": "none",
+      "steps": [],
+      "value": ""
+    },
+    "up": {
+      "kind": "keyboard",
+      "steps": [],
+      "value": "volume down"
+    }
+  },
+  "name": "Tools",
+  "oled": {
+    "line1": "Profile {profile_slot}",
+    "line2": "{profile_name}"
+  }
+}

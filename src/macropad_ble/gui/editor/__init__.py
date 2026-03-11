@@ -1,0 +1,2 @@
+"""Editor GUI package."""
+

@@ -7,6 +7,12 @@ def test_parser_parses_list_command() -> None:
     assert args.command == "list"
 
 
+def test_parser_parses_gui_command() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["gui"])
+    assert args.command == "gui"
+
+
 def test_parser_parses_listen_command() -> None:
     parser = build_parser()
     args = parser.parse_args(["listen"])

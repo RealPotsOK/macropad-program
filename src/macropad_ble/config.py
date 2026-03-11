@@ -26,7 +26,7 @@ ALLOWED_KEYS = {
 class Settings:
     port: str | None = None
     hint: str | None = None
-    baud: int = 9600
+    baud: int = 115200
     ack_timeout: float = 0.75
     dedupe_ms: int = 100
     log_level: str = "INFO"

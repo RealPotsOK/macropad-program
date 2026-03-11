@@ -1,0 +1,13 @@
+pyserial>=3.5
+pillow>=10.0
+pystray>=0.19
+
+[build]
+pyinstaller>=6.0
+
+[dev]
+pytest>=8.0
+
+[ui]
+numpy>=1.26
+pygame-ce>=2.5

@@ -1,0 +1,101 @@
+{
+  "bindings": {
+    "0,0": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,0"
+    },
+    "0,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,1"
+    },
+    "0,2": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,2"
+    },
+    "0,3": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 0,3"
+    },
+    "1,0": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 1,0"
+    },
+    "1,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 1,1"
+    },
+    "1,2": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 1,2"
+    },
+    "1,3": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 1,3"
+    },
+    "2,0": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 2,0"
+    },
+    "2,1": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 2,1"
+    },
+    "2,2": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 2,2"
+    },
+    "2,3": {
+      "action": {
+        "kind": "none",
+        "steps": [],
+        "value": ""
+      },
+      "label": "Key 2,3"
+    }
+  },
+  "name": "Default"
+}
