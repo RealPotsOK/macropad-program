@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import queue
 
-from ...desktop import migrate_legacy_app_data, resolve_app_paths
+from ...desktop import migrate_legacy_app_data, resolve_app_paths, sync_packaged_runtime_assets
 from .shared import *
 
 class InitMixin:
@@ -58,6 +58,7 @@ class InitMixin:
 
         self.app_paths = resolve_app_paths()
         self._legacy_data_migrated = migrate_legacy_app_data(self.app_paths)
+        self._runtime_assets_synced = sync_packaged_runtime_assets(self.app_paths)
         self.data_root = self.app_paths.data_root
         self.profile_dir = self.app_paths.profile_dir
         self.state_path = self.app_paths.state_path
@@ -141,12 +142,14 @@ class InitMixin:
         self._font_zoom_baselines: dict[str, tuple[str, int, tuple[str, ...]]] = {}
         self._controller_body: tk.PanedWindow | None = None
         self._scripts_body: tk.PanedWindow | None = None
+        self._volume_overlay: Any | None = None
 
         self._configure_ttk_style()
         self._build_ui()
         self.root.update_idletasks()
         self._ensure_content_fits()
         self._configure_window_chrome()
+        self._initialize_overlay()
         self._configure_dpi_runtime()
         self._refresh_ports(prefer_device=self.app_state.last_port or settings.port or "")
         self._load_profile_slot(self.profile_slot)
@@ -156,6 +159,8 @@ class InitMixin:
         self._initialize_desktop_mode()
         if self._legacy_data_migrated:
             self._log(f"Migrated legacy profiles into {self.data_root}.")
+        if self._runtime_assets_synced:
+            self._log(f"Updated {self._runtime_assets_synced} runtime helper script(s) from the packaged profiles.")
 
         if self.auto_connect_var.get() and self._current_port_device:
             self._spawn(self._connect())

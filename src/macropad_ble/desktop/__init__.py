@@ -5,7 +5,7 @@ from .autostart import (
     is_autostart_enabled,
     set_autostart_enabled,
 )
-from .paths import AppPaths, migrate_legacy_app_data, resolve_app_paths
+from .paths import AppPaths, migrate_legacy_app_data, resolve_app_paths, sync_packaged_runtime_assets
 from .single_instance import SingleInstanceGuard
 from .tray import TrayController
 
@@ -20,4 +20,5 @@ __all__ = [
     "migrate_legacy_app_data",
     "resolve_app_paths",
     "set_autostart_enabled",
+    "sync_packaged_runtime_assets",
 ]

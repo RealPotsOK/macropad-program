@@ -1,4 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
+
+hiddenimports = []
+hiddenimports += collect_submodules('comtypes')
+hiddenimports += collect_submodules('pycaw')
+hiddenimports += collect_submodules('winsdk')
 
 
 a = Analysis(
@@ -6,7 +12,7 @@ a = Analysis(
     pathex=['C:\\Users\\Main\\OneDrive\\Documents\\Project\\MacroPad\\src'],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

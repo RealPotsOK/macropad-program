@@ -6,6 +6,7 @@ from .mixins_chrome import ChromeMixin
 from .mixins_connection import ConnectionMixin
 from .mixins_desktop import DesktopMixin
 from .mixins_init import InitMixin
+from .mixins_overlay import OverlayMixin
 from .mixins_panels_a import PanelsAMixin
 from .mixins_panels_b import PanelsBMixin
 from .mixins_profile import ProfileMixin
@@ -22,6 +23,7 @@ class MacropadWindow(
     ProfileMixin,
     ProfileCopyMixin,
     WorkspaceMixin,
+    OverlayMixin,
     DesktopMixin,
     ConnectionMixin,
     CallbacksAMixin,

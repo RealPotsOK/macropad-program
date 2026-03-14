@@ -395,6 +395,7 @@ class CallbacksBMixin:
             for task in list(self._background_tasks):
                 with suppress(asyncio.CancelledError):
                     await task
+            self._shutdown_overlay()
             self._shutdown_desktop_resources()
             with suppress(Exception):
                 self.root.destroy()

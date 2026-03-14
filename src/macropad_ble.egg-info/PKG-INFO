@@ -24,6 +24,9 @@ Description-Content-Type: text/markdown
 Requires-Dist: pyserial>=3.5
 Requires-Dist: pillow>=10.0
 Requires-Dist: pystray>=0.19
+Requires-Dist: keyboard>=0.13; platform_system == "Windows"
+Requires-Dist: pycaw>=20240210; platform_system == "Windows"
+Requires-Dist: winsdk>=1.0.0b10; platform_system == "Windows"
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 Provides-Extra: build

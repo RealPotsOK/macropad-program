@@ -325,6 +325,20 @@ class ConnectionMixin:
 
     async def _execute_key_binding(self, key: tuple[int, int]) -> None:
         binding = self._binding_for(key)
+        kind, value = normalize_profile_action_kind_value(binding.action.kind, binding.action.value)
+        has_inline_script = bool((binding.script_code or "").strip())
+        if kind in {"", ACTION_NONE} and not has_inline_script:
+            self._log(
+                f"Key {key[0]},{key[1]} has no action in profile "
+                f"{self.profile_slot} ({self.profile.name})."
+            )
+            return
+        if kind not in {"", ACTION_NONE}:
+            summary = value.strip() or "<empty>"
+            self._log(
+                f"Key {key[0]},{key[1]} -> {kind}: {summary} "
+                f"(profile {self.profile_slot}, {self.profile.name})"
+            )
         try:
             await self._execute_action_with_profile_support(binding.action)
         except ActionExecutionError as exc:
@@ -351,7 +365,7 @@ class ConnectionMixin:
         self._log(f"Profile changed to {target} ({source}, range {min_slot}-{max_slot}).")
 
 
-    async def _execute_action_with_profile_support(self, action: KeyAction) -> None:
+    async def _execute_action_with_profile_support(self, action: KeyAction, *, volume_direction: int = 1) -> None:
         kind, value = normalize_profile_action_kind_value(action.kind, action.value)
         if kind == ACTION_CHANGE_PROFILE:
             spec = parse_change_profile_value(value)
@@ -406,7 +420,12 @@ class ConnectionMixin:
             self._switch_profile_slot(target, source=kind, min_slot=1, max_slot=4)
             return
 
-        await execute_action(action, log=self._log)
+        await execute_action(
+            action,
+            log=self._log,
+            volume_direction=volume_direction,
+            on_volume_mixer=self._show_volume_overlay,
+        )
 
 
     async def _execute_inline_script(self, key: tuple[int, int]) -> None:

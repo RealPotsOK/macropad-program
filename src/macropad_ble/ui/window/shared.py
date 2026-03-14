@@ -40,6 +40,7 @@ from ..actions import (
     ACTION_PROFILE_SET,
     ACTION_PYTHON,
     ACTION_SEND_KEYS,
+    ACTION_VOLUME_MIXER,
     ACTION_TYPES,
     ActionExecutionError,
     ProfileChangeSpec,

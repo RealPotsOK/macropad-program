@@ -18,6 +18,7 @@ APP_ID = "MacroPadController"
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="macropad-controller")
     parser.add_argument("--config", type=Path, default=None, help="Path to TOML config file.")
+    parser.add_argument("--run-python-action", type=Path, default=None, help=argparse.SUPPRESS)
     parser.add_argument(
         "--hidden",
         action="store_true",
@@ -44,6 +45,10 @@ def _launch_command_tokens(*, hidden: bool) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.run_python_action is not None:
+        from .ui.actions import run_python_action_helper
+
+        return run_python_action_helper(str(args.run_python_action))
     guard = SingleInstanceGuard(APP_ID)
 
     try:

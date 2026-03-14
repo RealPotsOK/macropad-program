@@ -17,6 +17,58 @@ function Invoke-Checked {
     }
 }
 
+function Stop-MacroPadProcesses {
+    param(
+        [string[]]$Roots
+    )
+
+    $normalizedRoots = @(
+        $Roots |
+        Where-Object { $_ } |
+        ForEach-Object {
+            try {
+                [System.IO.Path]::GetFullPath($_).TrimEnd('\')
+            } catch {
+                $null
+            }
+        } |
+        Where-Object { $_ }
+    )
+
+    if (-not $normalizedRoots.Count) {
+        return
+    }
+
+    $targets = @()
+    foreach ($process in (Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        if ($process.Name -ne "MacroPad Controller.exe") {
+            continue
+        }
+        if (-not $process.ExecutablePath) {
+            continue
+        }
+        $fullPath = [System.IO.Path]::GetFullPath($process.ExecutablePath)
+        $matchesRoot = $false
+        foreach ($root in $normalizedRoots) {
+            if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $matchesRoot = $true
+                break
+            }
+        }
+        if ($matchesRoot) {
+            $targets += $process
+        }
+    }
+
+    foreach ($process in $targets) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($targets) {
+        Start-Sleep -Milliseconds 800
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $Python) {
     $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
@@ -45,6 +97,8 @@ $exePath = Join-Path $installDir "MacroPad Controller.exe"
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 $shortcutPath = Join-Path $startMenuDir "MacroPad Controller.lnk"
+
+Stop-MacroPadProcesses -Roots @($sourceDir, $installDir)
 
 if (Test-Path $installDir) {
     Remove-Item -Path $installDir -Recurse -Force

@@ -100,3 +100,39 @@ def migrate_legacy_app_data(paths: AppPaths) -> bool:
         migrated = True
 
     return migrated
+
+
+def sync_packaged_runtime_assets(paths: AppPaths) -> int:
+    source_root = paths.legacy_profile_dir
+    target_root = paths.profile_dir
+    if not source_root.exists():
+        return 0
+
+    updated = 0
+    for dirname in ("runtime_python", "runtime_ahk"):
+        source_dir = source_root / dirname
+        if not source_dir.exists():
+            continue
+
+        for source in source_dir.iterdir():
+            if source.is_dir():
+                continue
+            name = source.name.lower()
+            if name.startswith("all_keys."):
+                continue
+            if name.startswith("key_"):
+                continue
+            if name.startswith("profile_"):
+                continue
+
+            target = target_root / dirname / source.name
+            if target.exists():
+                try:
+                    if target.stat().st_mtime >= source.stat().st_mtime:
+                        continue
+                except OSError:
+                    pass
+            _copy_item(source, target)
+            updated += 1
+
+    return updated

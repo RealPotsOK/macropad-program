@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 import sys
+import time
 from typing import Any
 
 from .profile import Profile
@@ -36,6 +38,19 @@ _REFRESH_INTERVALS = {
     "{media_artist}": 2.0,
     "{media_track_artist}": 2.0,
 }
+
+_MEDIA_CONTEXT_CACHE: dict[str, str] = {
+    "spotify_track": "",
+    "spotify_artist": "",
+    "spotify_track_artist": "",
+    "media_track": "",
+    "media_artist": "",
+    "media_track_artist": "",
+}
+_MEDIA_CONTEXT_DISABLED_UNTIL = 0.0
+_MEDIA_CONTEXT_BACKOFF_SECONDS = 30.0
+_MEDIA_MANAGER_TIMEOUT_SECONDS = 0.35
+_MEDIA_PROPERTIES_TIMEOUT_SECONDS = 0.2
 
 
 class _SafeTemplateContext(dict[str, Any]):
@@ -122,57 +137,66 @@ async def build_description_context(
 
 
 async def _read_media_context() -> dict[str, str]:
-    context = {
-        "spotify_track": "",
-        "spotify_artist": "",
-        "spotify_track_artist": "",
-        "media_track": "",
-        "media_artist": "",
-        "media_track_artist": "",
-    }
+    global _MEDIA_CONTEXT_DISABLED_UNTIL
+    context = dict(_MEDIA_CONTEXT_CACHE)
     if sys.platform != "win32":
         return context
 
-    spotify_track, spotify_artist = await _read_media_session(app_hint="spotify")
-    media_track, media_artist = await _read_media_session(app_hint=None)
+    if time.monotonic() < _MEDIA_CONTEXT_DISABLED_UNTIL:
+        return context
 
-    context["spotify_track"] = spotify_track
-    context["spotify_artist"] = spotify_artist
-    context["spotify_track_artist"] = _join_track_artist(spotify_track, spotify_artist)
-    context["media_track"] = media_track
-    context["media_artist"] = media_artist
-    context["media_track_artist"] = _join_track_artist(media_track, media_artist)
-    return context
-
-
-async def _read_media_session(*, app_hint: str | None) -> tuple[str, str]:
     try:
         from winsdk.windows.media.control import (  # type: ignore
             GlobalSystemMediaTransportControlsSessionManager as GSMTCManager,
         )
     except Exception:
-        return ("", "")
+        return context
 
     try:
-        manager = await GSMTCManager.request_async()
+        manager = await asyncio.wait_for(
+            GSMTCManager.request_async(),
+            timeout=_MEDIA_MANAGER_TIMEOUT_SECONDS,
+        )
         sessions = list(manager.get_sessions())
     except Exception:
-        return ("", "")
+        _MEDIA_CONTEXT_DISABLED_UNTIL = time.monotonic() + _MEDIA_CONTEXT_BACKOFF_SECONDS
+        return context
 
-    hint = str(app_hint or "").strip().lower()
+    spotify_track = ""
+    spotify_artist = ""
+    media_track = ""
+    media_artist = ""
+
     for session in sessions:
         source = str(getattr(session, "source_app_user_model_id", "") or "").lower()
-        if hint and hint not in source:
-            continue
         try:
-            props = await session.try_get_media_properties_async()
+            props = await asyncio.wait_for(
+                session.try_get_media_properties_async(),
+                timeout=_MEDIA_PROPERTIES_TIMEOUT_SECONDS,
+            )
         except Exception:
             continue
         track = str(getattr(props, "title", "") or "").strip()
         artist = str(getattr(props, "artist", "") or "").strip()
-        if track or artist:
-            return (track, artist)
-    return ("", "")
+        if (track or artist) and not media_track and not media_artist:
+            media_track = track
+            media_artist = artist
+        if (track or artist) and "spotify" in source and not spotify_track and not spotify_artist:
+            spotify_track = track
+            spotify_artist = artist
+        if media_track and spotify_track:
+            break
+
+    context = {
+        "spotify_track": spotify_track,
+        "spotify_artist": spotify_artist,
+        "spotify_track_artist": _join_track_artist(spotify_track, spotify_artist),
+        "media_track": media_track,
+        "media_artist": media_artist,
+        "media_track_artist": _join_track_artist(media_track, media_artist),
+    }
+    _MEDIA_CONTEXT_CACHE.update(context)
+    return context
 
 
 def _join_track_artist(track: str, artist: str) -> str:

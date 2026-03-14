@@ -76,22 +76,69 @@ def test_cycle_profile_slot_wraps_large_delta() -> None:
 import asyncio
 
 import macropad_ble.ui.actions as actions
+from macropad_ble.desktop.paths import AppPaths
 from macropad_ble.ui.key_names import normalize_key_sequence, normalize_single_key_name
 from macropad_ble.ui.profile import KeyAction
 
 
-def test_execute_python_action_uses_pythonw_on_windows(monkeypatch) -> None:
-    launched: list[list[str]] = []
+def test_resolve_action_path_prefers_appdata_profiles_directory(monkeypatch, tmp_path) -> None:
+    app_root = tmp_path / "AppData" / "Roaming" / "macropad-ble"
+    script_path = app_root / "profiles" / "runtime_python" / "script.py"
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text("print('ok')\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        actions,
+        "resolve_app_paths",
+        lambda: AppPaths(
+            data_root=app_root,
+            profile_dir=app_root / "profiles",
+            state_path=app_root / "app_state.json",
+            legacy_profile_dir=tmp_path / "profiles",
+            legacy_state_path=tmp_path / "profiles" / "app_state.json",
+        ),
+    )
+
+    resolved = actions.resolve_action_path("profiles/runtime_python/script.py")
+
+    assert resolved == script_path.resolve()
+
+
+def test_execute_python_action_runs_script_in_process(monkeypatch, tmp_path) -> None:
+    app_root = tmp_path / "AppData" / "Roaming" / "macropad-ble"
+    script_path = app_root / "profiles" / "runtime_python" / "script.py"
+    script_path.parent.mkdir(parents=True, exist_ok=True)
+    script_path.write_text("print('ok')\n", encoding="utf-8")
+
+    executed: list[str] = []
     logs: list[str] = []
 
-    monkeypatch.setattr(actions.os, "name", "nt", raising=False)
-    monkeypatch.setattr(actions, "_pythonw_executable", lambda: "pythonw.exe")
-    monkeypatch.setattr(actions, "_launch_process", lambda cmd: launched.append(cmd))
+    monkeypatch.setattr(
+        actions,
+        "_run_python_script_file",
+        lambda path: executed.append(str(path)) or actions.PythonScriptResult(stdout="ok"),
+    )
+    monkeypatch.setattr(
+        actions,
+        "resolve_app_paths",
+        lambda: AppPaths(
+            data_root=app_root,
+            profile_dir=app_root / "profiles",
+            state_path=app_root / "app_state.json",
+            legacy_profile_dir=tmp_path / "profiles",
+            legacy_state_path=tmp_path / "profiles" / "app_state.json",
+        ),
+    )
 
-    asyncio.run(actions.execute_action(KeyAction(kind=actions.ACTION_PYTHON, value="script.py"), log=logs.append))
+    asyncio.run(
+        actions.execute_action(
+            KeyAction(kind=actions.ACTION_PYTHON, value="profiles/runtime_python/script.py"),
+            log=logs.append,
+        )
+    )
 
-    assert launched == [["pythonw.exe", "script.py"]]
-    assert logs and "Executed Python" in logs[0]
+    assert executed == [str(script_path.resolve())]
+    assert logs == ["PY STDOUT: ok", f"Executed Python: {script_path.resolve()}"]
 
 
 def test_execute_file_action_uses_pythonw_for_py_files_on_windows(monkeypatch, tmp_path) -> None:
@@ -114,6 +161,79 @@ def test_execute_file_action_uses_pythonw_for_py_files_on_windows(monkeypatch, t
 
     assert launched == [["pythonw.exe", str(script_path)]]
     assert logs and "Executed file" in logs[0]
+
+
+def test_execute_volume_mixer_action(monkeypatch) -> None:
+    logs: list[str] = []
+    overlays: list[object] = []
+
+    monkeypatch.setattr(
+        actions,
+        "change_volume_mixer_volume",
+        lambda raw_value, direction=1: type(
+            "Result",
+            (),
+            {
+                "label": "spotify.exe",
+                "title": "Spotify",
+                "matched_sessions": 1,
+                "volume_percent": 55,
+                "icon_path": "",
+            },
+        )(),
+    )
+
+    asyncio.run(
+        actions.execute_action(
+            KeyAction(kind=actions.ACTION_VOLUME_MIXER, value="kind=process;target=spotify.exe;step=0.05"),
+            log=logs.append,
+            volume_direction=-1,
+            on_volume_mixer=overlays.append,
+        )
+    )
+
+    assert logs == ["Volume mixer: spotify.exe -> 55% (1 session)"]
+    assert len(overlays) == 1
+
+
+def test_run_python_script_file_executes_main_and_captures_output(tmp_path) -> None:
+    script_path = tmp_path / "run_me.py"
+    marker_path = tmp_path / "marker.txt"
+    script_path.write_text(
+        "\n".join(
+            [
+                "from pathlib import Path",
+                "print('hello')",
+                f"Path({str(marker_path)!r}).write_text('done', encoding='utf-8')",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = actions._run_python_script_file(script_path)
+
+    assert result.stdout == "hello"
+    assert result.stderr == ""
+    assert marker_path.read_text(encoding="utf-8") == "done"
+
+
+def test_pythonw_executable_ignores_packaged_app_exe(monkeypatch, tmp_path) -> None:
+    app_exe = tmp_path / "MacroPad Controller.exe"
+    python_exe = tmp_path / "python.exe"
+    app_exe.write_text("", encoding="utf-8")
+    python_exe.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(actions.os, "name", "nt", raising=False)
+    monkeypatch.setattr(actions.sys, "executable", str(app_exe))
+    monkeypatch.setattr(actions.sys, "_base_executable", str(app_exe), raising=False)
+    monkeypatch.setattr(
+        actions.shutil,
+        "which",
+        lambda name: str(python_exe) if name.lower() == "python.exe" else None,
+    )
+
+    assert actions._pythonw_executable() == str(python_exe)
 
 
 def test_normalize_media_key_names() -> None:

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import os
 from pathlib import Path
+import runpy
 import shutil
 import subprocess
 import sys
@@ -10,8 +13,10 @@ from dataclasses import dataclass
 import re
 from typing import Callable
 
+from ..desktop import resolve_app_paths
 from .key_names import normalize_key_sequence
 from .profile import ACTION_NONE, KeyAction
+from .volume_mixer import VolumeMixerError, VolumeMixerResult, change_volume_mixer_volume
 
 ACTION_AHK = "ahk"
 ACTION_PYTHON = "python"
@@ -19,11 +24,13 @@ ACTION_FILE = "file"
 ACTION_KEYBOARD = "keyboard"
 ACTION_SEND_KEYS = "send_keys"
 ACTION_MACRO = "macro"
+ACTION_VOLUME_MIXER = "volume_mixer"
 ACTION_PROFILE_SET = "profile_set"
 ACTION_PROFILE_NEXT = "profile_next"
 ACTION_PROFILE_PREV = "profile_prev"
 ACTION_CHANGE_PROFILE = "change_profile"
 AUTOHOTKEY_V2_ENV = "AUTOHOTKEY_V2_EXE"
+PYTHON_ACTION_ENV = "MACROPAD_PYTHON_EXE"
 PROFILE_MIN_DEFAULT = 1
 PROFILE_MAX_DEFAULT = 4
 PROFILE_CHANGE_MODES = ("set", "next", "prev")
@@ -36,12 +43,20 @@ ACTION_TYPES = (
     ACTION_AHK,
     ACTION_PYTHON,
     ACTION_MACRO,
+    ACTION_VOLUME_MIXER,
     ACTION_CHANGE_PROFILE,
 )
 
 
 class ActionExecutionError(RuntimeError):
     pass
+
+
+@dataclass(slots=True)
+class PythonScriptResult:
+    returncode: int = 0
+    stdout: str = ""
+    stderr: str = ""
 
 
 def _windows_popen_kwargs() -> dict[str, object]:
@@ -53,6 +68,23 @@ def _windows_popen_kwargs() -> dict[str, object]:
     creationflags |= int(getattr(subprocess, "DETACHED_PROCESS", 0))
     kwargs: dict[str, object] = {"creationflags": creationflags}
 
+    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
+    use_show_window = getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    hide_window = getattr(subprocess, "SW_HIDE", 0)
+    if startupinfo_factory is not None:
+        startupinfo = startupinfo_factory()
+        startupinfo.dwFlags |= use_show_window
+        startupinfo.wShowWindow = hide_window
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
+def _windows_capture_kwargs() -> dict[str, object]:
+    if os.name != "nt":
+        return {}
+
+    creationflags = int(getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    kwargs: dict[str, object] = {"creationflags": creationflags}
     startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
     use_show_window = getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
     hide_window = getattr(subprocess, "SW_HIDE", 0)
@@ -242,14 +274,178 @@ def _launch_process(command: list[str]) -> None:
         joined = " ".join(command)
         raise ActionExecutionError(f"Failed to launch '{joined}': {exc}") from exc
 
-def _pythonw_executable() -> str:
+def _resolve_python_executable(*, windowless: bool) -> str:
     if os.name != "nt":
         return sys.executable
-    python_exe = Path(sys.executable)
-    pythonw = python_exe.with_name("pythonw.exe")
-    if pythonw.exists():
-        return str(pythonw)
-    return sys.executable
+
+    explicit = os.environ.get(PYTHON_ACTION_ENV, "").strip()
+    if explicit:
+        resolved = shutil.which(explicit)
+        if resolved:
+            return resolved
+        explicit_path = Path(explicit).expanduser()
+        if explicit_path.exists():
+            return str(explicit_path)
+        raise ActionExecutionError(
+            f"{PYTHON_ACTION_ENV} is set but not found: {explicit}. "
+            "Set it to a valid python.exe/pythonw.exe path."
+        )
+
+    candidates: list[Path] = []
+    for raw_value in [getattr(sys, "executable", ""), getattr(sys, "_base_executable", "")]:
+        if not raw_value:
+            continue
+        base = Path(raw_value)
+        if windowless:
+            candidates.append(base.with_name("pythonw.exe"))
+            candidates.append(base.with_name("python.exe"))
+        else:
+            candidates.append(base.with_name("python.exe"))
+            candidates.append(base.with_name("pythonw.exe"))
+        candidates.append(base)
+
+    for name in (("pythonw.exe", "python.exe") if windowless else ("python.exe", "pythonw.exe")):
+        resolved = shutil.which(name)
+        if resolved:
+            candidates.append(Path(resolved))
+
+    for candidate in candidates:
+        name = candidate.name.lower()
+        if name not in {"python.exe", "pythonw.exe", "python3.exe", "python3w.exe"}:
+            continue
+        if candidate.exists():
+            return str(candidate)
+
+    raise ActionExecutionError(
+        "Python interpreter not found for .py file action. Install Python or set "
+        f"{PYTHON_ACTION_ENV} to python.exe/pythonw.exe."
+    )
+
+
+def _pythonw_executable() -> str:
+    return _resolve_python_executable(windowless=True)
+
+
+def _python_console_executable() -> str:
+    return _resolve_python_executable(windowless=False)
+
+
+def _run_python_script_in_process(path: Path) -> PythonScriptResult:
+    stdout_buffer = io.StringIO()
+    stderr_buffer = io.StringIO()
+    absolute_path = path.resolve()
+    previous_argv = list(sys.argv)
+    previous_cwd = Path.cwd()
+    previous_sys_path = list(sys.path)
+    returncode = 0
+    try:
+        sys.argv = [str(absolute_path)]
+        sys.path.insert(0, str(absolute_path.parent))
+        os.chdir(str(absolute_path.parent))
+        with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
+            runpy.run_path(str(absolute_path), run_name="__main__")
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 0
+        returncode = 0 if code in {0, None} else int(code)
+    finally:
+        sys.argv = previous_argv
+        sys.path[:] = previous_sys_path
+        os.chdir(str(previous_cwd))
+
+    return PythonScriptResult(
+        returncode=returncode,
+        stdout=stdout_buffer.getvalue().strip(),
+        stderr=stderr_buffer.getvalue().strip(),
+    )
+
+
+def run_python_action_helper(script_path: str) -> int:
+    try:
+        result = _run_python_script_in_process(Path(script_path))
+    except Exception as exc:
+        print(f"Python action failed: {exc}", file=sys.stderr)
+        return 1
+
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+    return int(result.returncode)
+
+
+def _run_python_script_file(path: Path) -> PythonScriptResult:
+    absolute_path = path.resolve()
+    if getattr(sys, "frozen", False):
+        command = [str(Path(sys.executable).resolve()), "--run-python-action", str(absolute_path)]
+    else:
+        command = [_python_console_executable(), str(absolute_path)]
+    completed = subprocess.run(
+        command,
+        cwd=str(absolute_path.parent),
+        capture_output=True,
+        text=True,
+        **_windows_capture_kwargs(),
+    )
+    return PythonScriptResult(
+        returncode=int(completed.returncode),
+        stdout=(completed.stdout or "").strip(),
+        stderr=(completed.stderr or "").strip(),
+    )
+
+
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        token = str(path).lower()
+        if token in seen:
+            continue
+        seen.add(token)
+        unique.append(path)
+    return unique
+
+
+def _candidate_action_paths(raw_value: str) -> list[Path]:
+    raw_text = str(raw_value or "").strip()
+    if not raw_text:
+        return []
+
+    raw_path = Path(raw_text).expanduser()
+    if raw_path.is_absolute():
+        return [raw_path]
+
+    app_paths = resolve_app_paths()
+    candidates: list[Path] = []
+    parts = [part.lower() for part in raw_path.parts]
+    targets_profiles_root = bool(parts and parts[0] == "profiles")
+
+    if targets_profiles_root:
+        candidates.append((app_paths.data_root / raw_path).resolve())
+        candidates.append((Path.cwd() / raw_path).resolve())
+    else:
+        candidates.append((Path.cwd() / raw_path).resolve())
+        candidates.append((app_paths.profile_dir / raw_path).resolve())
+        candidates.append((app_paths.data_root / raw_path).resolve())
+
+    return _dedupe_paths(candidates)
+
+
+def resolve_action_path(raw_value: str) -> Path:
+    candidates = _candidate_action_paths(raw_value)
+    if not candidates:
+        return Path()
+    existing = [candidate for candidate in candidates if candidate.exists()]
+    if existing:
+        raw_path = Path(str(raw_value or "").strip())
+        parts = [part.lower() for part in raw_path.parts]
+        if len(parts) >= 2 and parts[0] == "profiles" and parts[1] in {"runtime_python", "runtime_ahk"}:
+            existing.sort(
+                key=lambda path: (path.stat().st_mtime, -candidates.index(path)),
+                reverse=True,
+            )
+            return existing[0]
+        return existing[0]
+    return candidates[0]
 
 
 def _launch_windows_file_action(path: Path) -> bool:
@@ -323,6 +519,8 @@ async def execute_action(
     action: KeyAction,
     *,
     log: Callable[[str], None],
+    volume_direction: int = 1,
+    on_volume_mixer: Callable[[VolumeMixerResult], None] | None = None,
 ) -> None:
     kind = action.kind.strip().lower()
 
@@ -332,23 +530,39 @@ async def execute_action(
     if kind == ACTION_AHK:
         if not action.value.strip():
             raise ActionExecutionError("AHK action is missing script path.")
+        path = resolve_action_path(action.value)
+        if not path.exists():
+            raise ActionExecutionError(f"AHK action path not found: {path}")
         executable = _resolve_ahk_v2_executable()
-        _launch_process([executable, action.value.strip()])
-        log(f"Executed AHK v2: {action.value.strip()}")
+        _launch_process([executable, str(path)])
+        log(f"Executed AHK v2: {path}")
         return
 
     if kind == ACTION_PYTHON:
         if not action.value.strip():
             raise ActionExecutionError("Python action is missing script path.")
-        executable = _pythonw_executable() if os.name == "nt" else sys.executable
-        _launch_process([executable, action.value.strip()])
-        log(f"Executed Python: {action.value.strip()}")
+        path = resolve_action_path(action.value)
+        if not path.exists():
+            raise ActionExecutionError(f"Python action path not found: {path}")
+        try:
+            result = await asyncio.to_thread(_run_python_script_file, path)
+        except Exception as exc:
+            raise ActionExecutionError(f"Failed to run Python script '{path}': {exc}") from exc
+        for line in result.stdout.splitlines():
+            if line.strip():
+                log(f"PY STDOUT: {line.strip()}")
+        for line in result.stderr.splitlines():
+            if line.strip():
+                log(f"PY STDERR: {line.strip()}")
+        if result.returncode != 0:
+            raise ActionExecutionError(f"Python script exited with code {result.returncode}: {path}")
+        log(f"Executed Python: {path}")
         return
 
     if kind == ACTION_FILE:
         if not action.value.strip():
             raise ActionExecutionError("file action is missing file path.")
-        path = Path(action.value.strip()).expanduser()
+        path = resolve_action_path(action.value)
         if not path.exists():
             raise ActionExecutionError(f"file action path not found: {path}")
 
@@ -364,6 +578,25 @@ async def execute_action(
         else:
             _launch_process(["xdg-open", str(path)])
         log(f"Opened file: {path}")
+        return
+
+    if kind == ACTION_VOLUME_MIXER:
+        if not action.value.strip():
+            raise ActionExecutionError("volume_mixer action is missing a target app.")
+        try:
+            result = await asyncio.to_thread(
+                change_volume_mixer_volume,
+                action.value,
+                direction=volume_direction,
+            )
+        except VolumeMixerError as exc:
+            raise ActionExecutionError(str(exc)) from exc
+        if on_volume_mixer is not None:
+            on_volume_mixer(result)
+        log(
+            f"Volume mixer: {result.label} -> {result.volume_percent}% "
+            f"({result.matched_sessions} session{'s' if result.matched_sessions != 1 else ''})"
+        )
         return
 
     if kind in {ACTION_KEYBOARD, ACTION_SEND_KEYS}:
@@ -398,7 +631,12 @@ async def execute_action(
                 delay_ms = 0
             if delay_ms > 0:
                 await asyncio.sleep(delay_ms / 1000.0)
-            await execute_action(KeyAction(kind=step_kind, value=step_value), log=log)
+            await execute_action(
+                KeyAction(kind=step_kind, value=step_value),
+                log=log,
+                volume_direction=volume_direction,
+                on_volume_mixer=on_volume_mixer,
+            )
         log("Executed macro.")
         return
 

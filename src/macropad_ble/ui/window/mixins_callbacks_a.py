@@ -203,12 +203,16 @@ class CallbacksAMixin:
         normalized = direction.strip().lower()
         if normalized == "up":
             action = self.profile.enc_up_action
+            volume_direction = 1
         elif normalized == "down":
             action = self.profile.enc_down_action
+            volume_direction = -1
         elif normalized == "sw_down":
             action = self.profile.enc_sw_down_action
+            volume_direction = 1
         elif normalized == "sw_up":
             action = self.profile.enc_sw_up_action
+            volume_direction = 1
         else:
             return
         if action.kind.strip().lower() in {"", ACTION_NONE}:
@@ -216,7 +220,7 @@ class CallbacksAMixin:
 
         for _ in range(max(1, steps)):
             try:
-                await self._execute_action_with_profile_support(action)
+                await self._execute_action_with_profile_support(action, volume_direction=volume_direction)
             except ActionExecutionError as exc:
                 self._error_count += 1
                 self._log(f"ENC {normalized} action failed: {exc}")
@@ -251,6 +255,11 @@ class CallbacksAMixin:
             if path:
                 target_var.set(path)
             return
+        if kind == ACTION_VOLUME_MIXER:
+            picked = self._open_volume_mixer_picker(existing)
+            if picked:
+                target_var.set(picked)
+            return
         if kind in {ACTION_KEYBOARD, ACTION_SEND_KEYS}:
             selected = self._open_keyboard_key_picker(target_var.get())
             if selected:
@@ -261,6 +270,207 @@ class CallbacksAMixin:
             if picked:
                 target_var.set(picked)
             return
+
+
+    def _open_volume_mixer_picker(self, current_value: str) -> str | None:
+        from ..volume_mixer import (
+            VolumeMixerError,
+            VolumeMixerSpec,
+            VolumeMixerTarget,
+            format_volume_mixer_value,
+            list_volume_mixer_targets,
+            parse_volume_mixer_value,
+        )
+
+        spec = parse_volume_mixer_value(current_value)
+        try:
+            targets = list_volume_mixer_targets()
+        except VolumeMixerError as exc:
+            messagebox.showerror("Volume Mixer", str(exc), parent=self.root)
+            return None
+
+        if not targets and not spec.target_value.strip():
+            messagebox.showinfo(
+                "Volume Mixer",
+                "No active audio-session apps were found. Open the app and make sure it is producing audio.",
+                parent=self.root,
+            )
+            return None
+
+        current_target = spec.target_value.strip()
+        current_kind = spec.target_kind.strip().lower() or "process"
+        if current_target and not any(
+            item.target_kind == current_kind and item.target_value.lower() == current_target.lower() for item in targets
+        ):
+            label = f"{current_target} (saved target)"
+            targets.insert(0, VolumeMixerTarget(current_kind, current_target, label))
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Volume Mixer App")
+        dialog.transient(self.root)
+        dialog.configure(bg=BG_PANEL)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+
+        result: dict[str, str | None] = {"value": None}
+        step_percent = int(round((spec.step or 0.05) * 100))
+        if step_percent == 0:
+            step_percent = 5
+        step_var = tk.StringVar(value=str(step_percent))
+
+        tk.Label(
+            dialog,
+            text="Choose an app with an active Windows audio session",
+            bg=BG_PANEL,
+            fg=FG_ACCENT,
+            font=("Segoe UI", 10, "bold"),
+        ).pack(anchor="w", padx=10, pady=(10, 6))
+
+        list_frame = tk.Frame(dialog, bg=BG_PANEL)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+
+        target_list = tk.Listbox(
+            list_frame,
+            width=42,
+            height=10,
+            bg=BG_INPUT,
+            fg=FG_TEXT,
+            selectbackground="#1D4ED8",
+            selectforeground="#FFFFFF",
+            relief="flat",
+            activestyle="none",
+            highlightthickness=1,
+            highlightbackground=BORDER_MUTED,
+            highlightcolor=BORDER_SELECTED,
+            exportselection=False,
+        )
+        target_list.pack(side="left", fill="both", expand=True)
+        scrollbar = tk.Scrollbar(list_frame, command=target_list.yview)
+        scrollbar.pack(side="right", fill="y")
+        target_list.configure(yscrollcommand=scrollbar.set)
+
+        labels: list[str] = []
+        for item in targets:
+            labels.append(item.label)
+            target_list.insert("end", item.label)
+
+        default_index = 0
+        for index, item in enumerate(targets):
+            if item.target_kind == current_kind and item.target_value.lower() == current_target.lower():
+                default_index = index
+                break
+        if labels:
+            target_list.selection_set(default_index)
+            target_list.see(default_index)
+
+        options = tk.Frame(dialog, bg=BG_PANEL)
+        options.pack(fill="x", padx=10, pady=(0, 8))
+        tk.Label(options, text="Step %", bg=BG_PANEL, fg=FG_TEXT).pack(side="left")
+        tk.Entry(
+            options,
+            textvariable=step_var,
+            width=6,
+            bg=BG_INPUT,
+            fg=FG_TEXT,
+            insertbackground=FG_TEXT,
+            relief="flat",
+        ).pack(side="left", padx=(8, 0))
+        tk.Label(
+            options,
+            text="Use negative to invert direction. Up/down still apply their own direction on top.",
+            bg=BG_PANEL,
+            fg=FG_MUTED,
+            font=("Segoe UI", 8),
+        ).pack(side="left", padx=(10, 0))
+
+        def _refresh_targets() -> None:
+            try:
+                refreshed = list_volume_mixer_targets()
+            except VolumeMixerError as exc:
+                messagebox.showerror("Volume Mixer", str(exc), parent=dialog)
+                return
+            target_list.delete(0, "end")
+            targets.clear()
+            targets.extend(refreshed)
+            if current_target and not any(
+                item.target_kind == current_kind and item.target_value.lower() == current_target.lower()
+                for item in targets
+            ):
+                targets.insert(0, VolumeMixerTarget(current_kind, current_target, f"{current_target} (saved target)"))
+            for item in targets:
+                target_list.insert("end", item.label)
+            if targets:
+                target_list.selection_set(0)
+                target_list.see(0)
+
+        def _accept(_event: object | None = None) -> None:
+            selected = target_list.curselection()
+            if not selected:
+                messagebox.showerror("Volume Mixer", "Select an app from the list.", parent=dialog)
+                return
+            raw_percent = step_var.get().strip()
+            try:
+                percent = int(raw_percent, 10)
+            except ValueError:
+                messagebox.showerror("Volume Mixer", "Step % must be an integer.", parent=dialog)
+                return
+            if percent == 0:
+                messagebox.showerror("Volume Mixer", "Step % cannot be 0.", parent=dialog)
+                return
+            if percent > 100:
+                percent = 100
+            if percent < -100:
+                percent = -100
+            target = targets[selected[0]]
+            result["value"] = format_volume_mixer_value(
+                VolumeMixerSpec(
+                    target_kind=target.target_kind,
+                    target_value=target.target_value,
+                    step=percent / 100.0,
+                )
+            )
+            dialog.destroy()
+
+        def _cancel() -> None:
+            dialog.destroy()
+
+        buttons = tk.Frame(dialog, bg=BG_PANEL)
+        buttons.pack(fill="x", padx=10, pady=(0, 10))
+        tk.Button(
+            buttons,
+            text="Refresh",
+            bg="#334155",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            command=_refresh_targets,
+        ).pack(side="left")
+        tk.Button(
+            buttons,
+            text="Cancel",
+            bg="#1F2937",
+            fg=FG_TEXT,
+            relief="flat",
+            padx=10,
+            command=_cancel,
+        ).pack(side="right")
+        tk.Button(
+            buttons,
+            text="Use App",
+            bg="#2563EB",
+            fg="#FFFFFF",
+            relief="flat",
+            padx=10,
+            command=_accept,
+        ).pack(side="right", padx=(0, 6))
+
+        target_list.bind("<Double-Button-1>", _accept)
+        target_list.bind("<Return>", _accept)
+        dialog.bind("<Escape>", lambda _event: _cancel())
+        dialog.protocol("WM_DELETE_WINDOW", _cancel)
+        target_list.focus_set()
+        self.root.wait_window(dialog)
+        return result["value"]
 
 
     def _open_change_profile_picker(self, current_value: str, *, initial_kind: str) -> str | None:

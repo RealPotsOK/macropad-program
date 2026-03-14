@@ -280,10 +280,9 @@ class WorkspaceMixin:
             return None
         if not value or value == INLINE_PYTHON_ACTION_VALUE:
             return None
-        path = Path(value).expanduser()
-        if not path.is_absolute():
-            path = (Path.cwd() / path).resolve()
-        return path
+        from ..actions import resolve_action_path
+
+        return resolve_action_path(value)
 
 
     def _script_text_for_editor(self, key: tuple[int, int], binding: KeyBinding) -> tuple[str, bool, str]:

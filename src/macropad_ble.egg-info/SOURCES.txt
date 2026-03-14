@@ -39,6 +39,9 @@ src/macropad_ble/ui/oled_text.py
 src/macropad_ble/ui/profile.py
 src/macropad_ble/ui/profile_images.py
 src/macropad_ble/ui/step_blocks.py
+src/macropad_ble/ui/volume_mixer.py
+src/macropad_ble/ui/volume_overlay.py
+src/macropad_ble/ui/windows_icons.py
 src/macropad_ble/ui/window/__init__.py
 src/macropad_ble/ui/window/main.py
 src/macropad_ble/ui/window/mixins_callbacks_a.py
@@ -47,6 +50,7 @@ src/macropad_ble/ui/window/mixins_chrome.py
 src/macropad_ble/ui/window/mixins_connection.py
 src/macropad_ble/ui/window/mixins_desktop.py
 src/macropad_ble/ui/window/mixins_init.py
+src/macropad_ble/ui/window/mixins_overlay.py
 src/macropad_ble/ui/window/mixins_panels_a.py
 src/macropad_ble/ui/window/mixins_panels_b.py
 src/macropad_ble/ui/window/mixins_profile.py
@@ -65,3 +69,4 @@ tests/test_profile_images.py
 tests/test_profile_render.py
 tests/test_serial_logic.py
 tests/test_ui_actions.py
+tests/test_volume_mixer.py
