@@ -251,9 +251,13 @@ class CallbacksAMixin:
         kind, existing = normalize_profile_action_kind_value(kind_text, target_var.get())
         target_var.set(existing)
         if kind in {ACTION_AHK, ACTION_PYTHON, ACTION_FILE}:
-            path = filedialog.askopenfilename(title="Select file")
+            path = filedialog.askopenfilename(
+                title="Select file",
+                initialdir=self._resolve_dialog_directory(existing),
+            )
             if path:
                 target_var.set(path)
+                self._remember_dialog_path(path)
             return
         if kind == ACTION_VOLUME_MIXER:
             picked = self._open_volume_mixer_picker(existing)
@@ -384,6 +388,13 @@ class CallbacksAMixin:
         ).pack(side="left", padx=(10, 0))
 
         def _refresh_targets() -> None:
+            selected_key = ""
+            selected = target_list.curselection()
+            if selected:
+                current_item = targets[selected[0]]
+                selected_key = f"{current_item.target_kind}:{current_item.target_value.lower()}"
+            elif current_target:
+                selected_key = f"{current_kind}:{current_target.lower()}"
             try:
                 refreshed = list_volume_mixer_targets()
             except VolumeMixerError as exc:
@@ -400,8 +411,14 @@ class CallbacksAMixin:
             for item in targets:
                 target_list.insert("end", item.label)
             if targets:
-                target_list.selection_set(0)
-                target_list.see(0)
+                selected_index = 0
+                for index, item in enumerate(targets):
+                    target_key = f"{item.target_kind}:{item.target_value.lower()}"
+                    if selected_key and target_key == selected_key:
+                        selected_index = index
+                        break
+                target_list.selection_set(selected_index)
+                target_list.see(selected_index)
 
         def _accept(_event: object | None = None) -> None:
             selected = target_list.curselection()

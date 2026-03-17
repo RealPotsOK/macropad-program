@@ -274,8 +274,11 @@ class PanelsBMixin:
         tk.Label(left, text="Keys", bg=BG_PANEL, fg=FG_ACCENT, font=("Segoe UI", 11, "bold")).pack(
             anchor="w", padx=10, pady=(10, 6)
         )
+        key_list_panel = tk.Frame(left, bg=BG_PANEL)
+        key_list_panel.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         self._script_key_list = tk.Listbox(
-            left,
+            key_list_panel,
+            height=6,
             bg=BG_INPUT,
             fg=FG_TEXT,
             selectbackground="#1D4ED8",
@@ -283,8 +286,12 @@ class PanelsBMixin:
             activestyle="none",
             relief="flat",
             font=("Consolas", 11),
+            exportselection=False,
         )
-        self._script_key_list.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        self._script_key_list.pack(side="left", fill="both", expand=True)
+        script_key_scrollbar = tk.Scrollbar(key_list_panel, command=self._script_key_list.yview)
+        script_key_scrollbar.pack(side="right", fill="y")
+        self._script_key_list.configure(yscrollcommand=script_key_scrollbar.set)
         self._script_key_list.bind("<<ListboxSelect>>", self._on_script_key_selected)
         for row, col in self.keys:
             self._script_key_list.insert("end", f"{row},{col}")

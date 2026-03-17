@@ -11,6 +11,7 @@ from .mixins_panels_a import PanelsAMixin
 from .mixins_panels_b import PanelsBMixin
 from .mixins_profile import ProfileMixin
 from .mixins_profile_copy import ProfileCopyMixin
+from .mixins_stats import StatsMixin
 from .mixins_workspace import WorkspaceMixin
 from .shared import SerialControllerError, Settings, _enable_windows_dpi_awareness, suppress, tk
 
@@ -20,6 +21,7 @@ class MacropadWindow(
     ChromeMixin,
     PanelsAMixin,
     PanelsBMixin,
+    StatsMixin,
     ProfileMixin,
     ProfileCopyMixin,
     WorkspaceMixin,

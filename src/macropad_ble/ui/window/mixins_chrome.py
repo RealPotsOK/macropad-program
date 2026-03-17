@@ -432,14 +432,18 @@ class ChromeMixin:
 
         notebook = ttk.Notebook(self.root, style="Dark.TNotebook")
         notebook.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+        self._notebook = notebook
 
         controller_tab = tk.Frame(notebook, bg=BG_APP)
         scripts_tab = tk.Frame(notebook, bg=BG_APP)
+        stats_tab = tk.Frame(notebook, bg=BG_APP)
         notebook.add(controller_tab, text="Controller")
         notebook.add(scripts_tab, text="Scripts")
+        notebook.add(stats_tab, text="Stats")
 
         self._build_controller_tab(controller_tab)
         self._build_scripts_tab(scripts_tab)
+        self._build_stats_tab(stats_tab)
 
         status = tk.Frame(self.root, bg=BG_PANEL, highlightthickness=1, highlightbackground=BORDER_MUTED)
         status.pack(fill="x", side="bottom", padx=10, pady=(0, 10))

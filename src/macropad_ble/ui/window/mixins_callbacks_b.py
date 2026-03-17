@@ -32,10 +32,12 @@ class CallbacksBMixin:
     def _on_import_profile_clicked(self) -> None:
         path = filedialog.askopenfilename(
             title="Import Profile",
+            initialdir=self._resolve_dialog_directory(),
             filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
         )
         if not path:
             return
+        self._remember_dialog_path(path)
         try:
             imported = load_profile(Path(path), name=self.profile_names[self.profile_slot], keys=self.keys)
         except Exception as exc:
@@ -55,11 +57,13 @@ class CallbacksBMixin:
     def _on_export_profile_clicked(self) -> None:
         path = filedialog.asksaveasfilename(
             title="Export Profile",
+            initialdir=self._resolve_dialog_directory(),
             defaultextension=".json",
             filetypes=(("JSON files", "*.json"), ("All files", "*.*")),
         )
         if not path:
             return
+        self._remember_dialog_path(path)
         try:
             save_profile(Path(path), self.profile)
         except Exception as exc:
@@ -298,11 +302,13 @@ class CallbacksBMixin:
             return
         path = filedialog.asksaveasfilename(
             title="Save Diagnostics",
+            initialdir=self._resolve_dialog_directory(),
             defaultextension=".log",
             filetypes=(("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")),
         )
         if not path:
             return
+        self._remember_dialog_path(path)
         Path(path).write_text(self._log_text.get("1.0", "end-1c"), encoding="utf-8")
         self._log(f"Saved log to {path}")
 
@@ -387,6 +393,7 @@ class CallbacksBMixin:
                 self._poll_desktop_events()
                 self._animate_tiles()
                 self._update_rate_metrics()
+                self._refresh_system_stats_if_due()
                 await asyncio.sleep(0.03)
         finally:
             await self._disconnect()

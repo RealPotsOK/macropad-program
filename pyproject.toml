@@ -12,6 +12,7 @@ dependencies = [
   "pyserial>=3.5",
   "pillow>=10.0",
   "pystray>=0.19",
+  "psutil>=5.9",
   "keyboard>=0.13; platform_system == 'Windows'",
   "pycaw>=20240210; platform_system == 'Windows'",
   "winsdk>=1.0.0b10; platform_system == 'Windows'",

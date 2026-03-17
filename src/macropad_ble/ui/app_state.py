@@ -14,6 +14,7 @@ class AppState:
     auto_connect: bool = True
     selected_profile_slot: int = 1
     profile_names: dict[str, str] = field(default_factory=dict)
+    last_dialog_directory: str = ""
 
 
 def _normalize_slot(slot: Any) -> int:
@@ -67,6 +68,8 @@ def load_app_state(path: Path) -> AppState:
             if key_text and name_text:
                 state.profile_names[key_text] = name_text
 
+    state.last_dialog_directory = str(raw.get("last_dialog_directory") or "").strip()
+
     return state
 
 
@@ -79,5 +82,6 @@ def save_app_state(path: Path, state: AppState) -> None:
         "auto_connect": bool(state.auto_connect),
         "selected_profile_slot": _normalize_slot(state.selected_profile_slot),
         "profile_names": dict(state.profile_names),
+        "last_dialog_directory": str(state.last_dialog_directory or "").strip(),
     }
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")

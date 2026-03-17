@@ -46,6 +46,7 @@ class InitMixin:
         self._last_packet_monotonic: float | None = None
         self._last_packet_clock = "--"
         self._enc_total = 0
+        self._app_started_monotonic = time.monotonic()
 
         self.keys = sorted(KEY_DISPLAY_MAP.keys())
         if not self.keys:
@@ -134,6 +135,10 @@ class InitMixin:
         self._script_editor_read_only = False
         self._script_linked_path: Path | None = None
         self._log_text: tk.Text | None = None
+        self._stats_text: tk.Text | None = None
+        self._stats_process: Any | None = None
+        self._stats_last_report = ""
+        self._stats_last_updated_at = 0.0
         self._app_icon: tk.PhotoImage | None = None
         self._last_dpi: int | None = None
         self._last_zoom_factor: float | None = None
@@ -146,6 +151,8 @@ class InitMixin:
 
         self._configure_ttk_style()
         self._build_ui()
+        self._prime_stats_monitoring()
+        self._refresh_system_stats(force=True)
         self.root.update_idletasks()
         self._ensure_content_fits()
         self._configure_window_chrome()

@@ -4,6 +4,42 @@ from .shared import *
 from .shared import _slot_label
 
 class ProfileMixin:
+    def _resolve_dialog_directory(self, raw_value: str = "") -> str:
+        candidates: list[Path] = []
+
+        text = str(raw_value or "").strip()
+        if text:
+            candidate = Path(text).expanduser()
+            if candidate.exists():
+                candidates.append(candidate if candidate.is_dir() else candidate.parent)
+            elif candidate.parent.exists():
+                candidates.append(candidate.parent)
+
+        remembered = str(self.app_state.last_dialog_directory or "").strip()
+        if remembered:
+            remembered_path = Path(remembered).expanduser()
+            if remembered_path.exists():
+                candidates.append(remembered_path)
+
+        candidates.extend([self.profile_dir, self.data_root, Path.cwd()])
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate.resolve())
+        return str(Path.cwd())
+
+
+    def _remember_dialog_path(self, raw_value: str | Path) -> None:
+        candidate = Path(raw_value).expanduser()
+        directory = candidate if candidate.is_dir() else candidate.parent
+        if not directory.exists():
+            return
+        resolved = str(directory.resolve())
+        if self.app_state.last_dialog_directory == resolved:
+            return
+        self.app_state.last_dialog_directory = resolved
+        self._save_app_state()
+
+
     def _normalize_action_for_ui(self, action: KeyAction) -> None:
         kind, value = normalize_profile_action_kind_value(action.kind, action.value)
         action.kind = kind
