@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from macropad_ble.backoff import ExponentialBackoff
-from macropad_ble.board_serial import (
+from macropad.backoff import ExponentialBackoff
+from macropad.board_serial import (
     EVENT_ENC_DELTA,
     EVENT_ENC_SWITCH,
     EVENT_KEY_STATE,
@@ -22,7 +22,7 @@ from macropad_ble.board_serial import (
     parse_event_line,
     resolve_port,
 )
-from macropad_ble.config import Settings
+from macropad.config import Settings
 
 
 class FakeSerial:

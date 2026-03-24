@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import queue
 from pathlib import Path
-from types import SimpleNamespace
 
-import macropad_ble.desktop.autostart as autostart
-import macropad_ble.desktop.paths as desktop_paths
-import macropad_ble.desktop.single_instance as single_instance
-from macropad_ble.ui.window.mixins_desktop import DesktopMixin
+import macropad.platform.autostart as autostart
+import macropad.platform.paths as desktop_paths
+import macropad.platform.single_instance as single_instance
 
 
 class _FakeKey:
@@ -88,65 +85,6 @@ class _FakeKernel32:
         return 1
 
 
-class _FakeRoot:
-    def __init__(self) -> None:
-        self.withdraw_calls = 0
-        self.deiconify_calls = 0
-        self.iconify_calls = 0
-        self.after_calls: list[int] = []
-
-    def after(self, delay: int, callback) -> str:
-        self.after_calls.append(delay)
-        if callable(callback):
-            callback()
-        return "after-id"
-
-    def withdraw(self) -> None:
-        self.withdraw_calls += 1
-
-    def deiconify(self) -> None:
-        self.deiconify_calls += 1
-
-    def iconify(self) -> None:
-        self.iconify_calls += 1
-
-    def state(self, _value: str) -> None:
-        return None
-
-    def lift(self) -> None:
-        return None
-
-    def focus_force(self) -> None:
-        return None
-
-    def attributes(self, _name: str, _value: bool) -> None:
-        return None
-
-
-class _FakeDesktop(DesktopMixin):
-    def __init__(self) -> None:
-        self.root = _FakeRoot()
-        self._closing = False
-        self._window_hidden = False
-        self._tray_available = True
-        self._tray_controller = None
-        self._instance_guard = None
-        self._tray_dispatch_queue: queue.SimpleQueue[object] = queue.SimpleQueue()
-        self._autostart_command = ["MacroPad Controller.exe", "--hidden"]
-        self.logs: list[str] = []
-        self.exit_prepared = False
-
-    def _log(self, message: str) -> None:
-        self.logs.append(message)
-
-    def _prepare_exit(self) -> None:
-        self.exit_prepared = True
-        self._closing = True
-
-    def _spawn(self, _coro) -> None:
-        return None
-
-
 def test_resolve_app_paths_uses_appdata_on_windows(tmp_path: Path) -> None:
     paths = desktop_paths.resolve_app_paths(
         cwd=tmp_path,
@@ -155,9 +93,10 @@ def test_resolve_app_paths_uses_appdata_on_windows(tmp_path: Path) -> None:
         home=tmp_path,
     )
 
-    assert paths.data_root == tmp_path / "Roaming" / "macropad-ble"
+    assert paths.data_root == tmp_path / "Roaming" / "macropad"
     assert paths.profile_dir == paths.data_root / "profiles"
     assert paths.state_path == paths.data_root / "app_state.json"
+    assert paths.legacy_appdata_root == tmp_path / "Roaming" / "macropad-ble"
 
 
 def test_migrate_legacy_app_data_copies_profiles_and_state(tmp_path: Path) -> None:
@@ -179,6 +118,28 @@ def test_migrate_legacy_app_data_copies_profiles_and_state(tmp_path: Path) -> No
     assert (paths.profile_dir / "profile_01.json").exists()
     assert (paths.profile_dir / "runtime_python" / "all_keys.py").exists()
     assert paths.state_path.read_text(encoding="utf-8") == '{"last_port":"COM13"}'
+
+
+def test_migrate_legacy_appdata_root_copies_profiles_and_state(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "Roaming" / "macropad-ble"
+    legacy_profiles = legacy_root / "profiles"
+    legacy_profiles.mkdir(parents=True)
+    (legacy_profiles / "profile_01.json").write_text("{}", encoding="utf-8")
+    (legacy_profiles / "runtime_ahk").mkdir()
+    (legacy_profiles / "runtime_ahk" / "all_keys.ahk").write_text("; ok\n", encoding="utf-8")
+    (legacy_root / "app_state.json").write_text('{"last_port":"COM14"}', encoding="utf-8")
+
+    paths = desktop_paths.resolve_app_paths(
+        cwd=tmp_path,
+        system="Windows",
+        env={"APPDATA": str(tmp_path / "Roaming")},
+        home=tmp_path,
+    )
+
+    assert desktop_paths.migrate_legacy_app_data(paths) is True
+    assert (paths.profile_dir / "profile_01.json").exists()
+    assert (paths.profile_dir / "runtime_ahk" / "all_keys.ahk").exists()
+    assert paths.state_path.read_text(encoding="utf-8") == '{"last_port":"COM14"}'
 
 
 def test_autostart_registry_enable_disable_round_trip() -> None:
@@ -205,41 +166,3 @@ def test_single_instance_secondary_launch_signals_restore(monkeypatch) -> None:
     assert secondary.signal_restore() is True
     assert primary.consume_restore_signal() is True
     assert primary.consume_restore_signal() is False
-
-
-def test_close_hides_window_instead_of_exiting() -> None:
-    desktop = _FakeDesktop()
-    desktop._on_window_close()
-
-    assert desktop.root.withdraw_calls == 1
-    assert desktop.exit_prepared is False
-    assert desktop._closing is False
-
-
-def test_request_exit_prepares_shutdown() -> None:
-    desktop = _FakeDesktop()
-    desktop._request_exit()
-
-    assert desktop.exit_prepared is True
-    assert desktop._closing is True
-
-
-def test_restore_signal_brings_window_back(monkeypatch) -> None:
-    desktop = _FakeDesktop()
-    desktop._window_hidden = True
-    desktop._instance_guard = SimpleNamespace(consume_restore_signal=lambda: True)
-
-    desktop._poll_desktop_events()
-
-    assert desktop.root.deiconify_calls == 1
-    assert desktop._window_hidden is False
-
-
-def test_tray_dispatch_queue_runs_callbacks_on_poll() -> None:
-    desktop = _FakeDesktop()
-    called: list[str] = []
-
-    desktop._enqueue_tray_callback(lambda: called.append("done"))
-    desktop._poll_desktop_events()
-
-    assert called == ["done"]

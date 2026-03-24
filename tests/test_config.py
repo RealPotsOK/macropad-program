@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from macropad_ble.config import default_user_config_path, load_settings
+from macropad.config import default_user_config_path, load_settings
 
 
 def _write(path: Path, content: str) -> None:
@@ -23,9 +23,9 @@ def test_defaults_without_config(tmp_path: Path) -> None:
 
 
 def test_project_config_preferred_over_user_config(tmp_path: Path) -> None:
-    project_config = tmp_path / "macropad-ble.toml"
+    project_config = tmp_path / "macropad.toml"
     user_root = tmp_path / "user-config"
-    user_config = user_root / "macropad-ble" / "config.toml"
+    user_config = user_root / "macropad" / "config.toml"
 
     _write(project_config, 'hint = "ProjectBoard"\n')
     _write(user_config, 'hint = "UserBoard"\n')
@@ -40,7 +40,7 @@ def test_project_config_preferred_over_user_config(tmp_path: Path) -> None:
 
 
 def test_cli_overrides_take_precedence(tmp_path: Path) -> None:
-    config = tmp_path / "macropad-ble.toml"
+    config = tmp_path / "macropad.toml"
     _write(
         config,
         "\n".join(
@@ -74,19 +74,43 @@ def test_windows_user_config_path_uses_appdata() -> None:
         env={"APPDATA": r"C:\Users\Test\AppData\Roaming"},
         home=Path(r"C:\Users\Test"),
     )
-    expected = Path(r"C:\Users\Test\AppData\Roaming") / "macropad-ble" / "config.toml"
+    expected = Path(r"C:\Users\Test\AppData\Roaming") / "macropad" / "config.toml"
     assert path == expected
 
 
-def test_invalid_log_level_rejected(tmp_path: Path) -> None:
+def test_legacy_project_config_is_used_when_new_name_is_missing(tmp_path: Path) -> None:
     config = tmp_path / "macropad-ble.toml"
+    _write(config, 'hint = "LegacyProject"\n')
+
+    settings = load_settings(cwd=tmp_path, system="Linux", env={}, home=tmp_path)
+
+    assert settings.hint == "LegacyProject"
+
+
+def test_legacy_user_config_is_used_when_new_name_is_missing(tmp_path: Path) -> None:
+    user_root = tmp_path / "user-config"
+    legacy_user_config = user_root / "macropad-ble" / "config.toml"
+    _write(legacy_user_config, 'hint = "LegacyUser"\n')
+
+    settings = load_settings(
+        cwd=tmp_path,
+        system="Linux",
+        env={"XDG_CONFIG_HOME": str(user_root)},
+        home=tmp_path,
+    )
+
+    assert settings.hint == "LegacyUser"
+
+
+def test_invalid_log_level_rejected(tmp_path: Path) -> None:
+    config = tmp_path / "macropad.toml"
     _write(config, 'log_level = "LOUD"\n')
     with pytest.raises(ValueError):
         load_settings(config_path=config, cwd=tmp_path)
 
 
 def test_invalid_dedupe_window_rejected(tmp_path: Path) -> None:
-    config = tmp_path / "macropad-ble.toml"
+    config = tmp_path / "macropad.toml"
     _write(config, "dedupe_ms = 25\n")
     with pytest.raises(ValueError):
         load_settings(config_path=config, cwd=tmp_path)

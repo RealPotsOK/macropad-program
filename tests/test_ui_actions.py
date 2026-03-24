@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from macropad_ble.ui.actions import (
+from macropad.core.actions import (
+    ACTION_AHK,
     ACTION_CHANGE_PROFILE,
+    ACTION_FILE,
+    ACTION_KEYBOARD,
+    ACTION_MACRO,
     ACTION_PROFILE_NEXT,
     ACTION_PROFILE_PREV,
     ACTION_PROFILE_SET,
+    ACTION_PYTHON,
+    ACTION_SEND_KEYS,
     cycle_profile_slot,
     format_change_profile_value,
     normalize_profile_action_kind_value,
@@ -54,6 +60,23 @@ def test_normalize_legacy_profile_actions() -> None:
     assert parsed_prev.step == 1
 
 
+def test_normalize_legacy_non_profile_actions() -> None:
+    kind_send_keys, _value_send_keys = normalize_profile_action_kind_value(ACTION_SEND_KEYS, "ctrl+a")
+    assert kind_send_keys == ACTION_KEYBOARD
+
+    kind_python, value_python = normalize_profile_action_kind_value(ACTION_PYTHON, "profiles/runtime_python/key.py")
+    assert kind_python == ACTION_FILE
+    assert value_python == "profiles/runtime_python/key.py"
+
+    kind_ahk, value_ahk = normalize_profile_action_kind_value(ACTION_AHK, "profiles/runtime_ahk/key.ahk")
+    assert kind_ahk == ACTION_FILE
+    assert value_ahk == "profiles/runtime_ahk/key.ahk"
+
+    kind_macro, value_macro = normalize_profile_action_kind_value(ACTION_MACRO, "legacy payload")
+    assert kind_macro == "none"
+    assert value_macro == ""
+
+
 def test_format_change_profile_round_trip() -> None:
     original = parse_change_profile_value("mode=prev;step=3;min=2;max=7")
     text = format_change_profile_value(original)
@@ -74,15 +97,16 @@ def test_cycle_profile_slot_wraps_large_delta() -> None:
     assert cycle_profile_slot(2, -5, min_slot=1, max_slot=4) == 1
 
 import asyncio
+from pathlib import Path
 
-import macropad_ble.ui.actions as actions
-from macropad_ble.desktop.paths import AppPaths
-from macropad_ble.ui.key_names import normalize_key_sequence, normalize_single_key_name
-from macropad_ble.ui.profile import KeyAction
+import macropad.core.actions as actions
+from macropad.platform.paths import AppPaths
+from macropad.core.key_names import normalize_key_sequence, normalize_single_key_name
+from macropad.core.profile import KeyAction
 
 
 def test_resolve_action_path_prefers_appdata_profiles_directory(monkeypatch, tmp_path) -> None:
-    app_root = tmp_path / "AppData" / "Roaming" / "macropad-ble"
+    app_root = tmp_path / "AppData" / "Roaming" / "macropad"
     script_path = app_root / "profiles" / "runtime_python" / "script.py"
     script_path.parent.mkdir(parents=True, exist_ok=True)
     script_path.write_text("print('ok')\n", encoding="utf-8")
@@ -94,6 +118,9 @@ def test_resolve_action_path_prefers_appdata_profiles_directory(monkeypatch, tmp
             data_root=app_root,
             profile_dir=app_root / "profiles",
             state_path=app_root / "app_state.json",
+            legacy_appdata_root=tmp_path / "AppData" / "Roaming" / "macropad-ble",
+            legacy_appdata_profile_dir=tmp_path / "AppData" / "Roaming" / "macropad-ble" / "profiles",
+            legacy_appdata_state_path=tmp_path / "AppData" / "Roaming" / "macropad-ble" / "app_state.json",
             legacy_profile_dir=tmp_path / "profiles",
             legacy_state_path=tmp_path / "profiles" / "app_state.json",
         ),
@@ -104,20 +131,16 @@ def test_resolve_action_path_prefers_appdata_profiles_directory(monkeypatch, tmp
     assert resolved == script_path.resolve()
 
 
-def test_execute_python_action_runs_script_in_process(monkeypatch, tmp_path) -> None:
-    app_root = tmp_path / "AppData" / "Roaming" / "macropad-ble"
-    script_path = app_root / "profiles" / "runtime_python" / "script.py"
-    script_path.parent.mkdir(parents=True, exist_ok=True)
-    script_path.write_text("print('ok')\n", encoding="utf-8")
+def test_resolve_action_path_prefers_local_profiles_in_dev_mode(monkeypatch, tmp_path) -> None:
+    app_root = tmp_path / "AppData" / "Roaming" / "macropad"
+    appdata_script = app_root / "profiles" / "runtime_python" / "script.py"
+    local_script = tmp_path / "project" / "profiles" / "runtime_python" / "script.py"
+    appdata_script.parent.mkdir(parents=True, exist_ok=True)
+    local_script.parent.mkdir(parents=True, exist_ok=True)
+    appdata_script.write_text("print('appdata')\n", encoding="utf-8")
+    local_script.write_text("print('local')\n", encoding="utf-8")
 
-    executed: list[str] = []
-    logs: list[str] = []
-
-    monkeypatch.setattr(
-        actions,
-        "_run_python_script_file",
-        lambda path: executed.append(str(path)) or actions.PythonScriptResult(stdout="ok"),
-    )
+    monkeypatch.setattr(actions.sys, "frozen", False, raising=False)
     monkeypatch.setattr(
         actions,
         "resolve_app_paths",
@@ -125,20 +148,40 @@ def test_execute_python_action_runs_script_in_process(monkeypatch, tmp_path) -> 
             data_root=app_root,
             profile_dir=app_root / "profiles",
             state_path=app_root / "app_state.json",
+            legacy_appdata_root=tmp_path / "AppData" / "Roaming" / "macropad-ble",
+            legacy_appdata_profile_dir=tmp_path / "AppData" / "Roaming" / "macropad-ble" / "profiles",
+            legacy_appdata_state_path=tmp_path / "AppData" / "Roaming" / "macropad-ble" / "app_state.json",
             legacy_profile_dir=tmp_path / "profiles",
             legacy_state_path=tmp_path / "profiles" / "app_state.json",
         ),
     )
+    monkeypatch.chdir(local_script.parents[2])
+
+    resolved = actions.resolve_action_path("profiles/runtime_python/script.py")
+
+    assert resolved == local_script.resolve()
+
+
+def test_execute_legacy_python_action_migrates_to_file_action(monkeypatch, tmp_path) -> None:
+    script_path = tmp_path / "macro.py"
+    script_path.write_text("print('ok')\n", encoding="utf-8")
+
+    launched: list[list[str]] = []
+    logs: list[str] = []
+
+    monkeypatch.setattr(actions.os, "name", "nt", raising=False)
+    monkeypatch.setattr(actions, "_pythonw_executable", lambda: "pythonw.exe")
+    monkeypatch.setattr(actions, "_launch_process", lambda cmd, **kwargs: launched.append(cmd))
 
     asyncio.run(
         actions.execute_action(
-            KeyAction(kind=actions.ACTION_PYTHON, value="profiles/runtime_python/script.py"),
+            KeyAction(kind=actions.ACTION_PYTHON, value=str(script_path)),
             log=logs.append,
         )
     )
 
-    assert executed == [str(script_path.resolve())]
-    assert logs == ["PY STDOUT: ok", f"Executed Python: {script_path.resolve()}"]
+    assert launched == [["pythonw.exe", str(script_path)]]
+    assert logs and "Executed file:" in logs[0]
 
 
 def test_execute_file_action_uses_pythonw_for_py_files_on_windows(monkeypatch, tmp_path) -> None:
@@ -150,7 +193,7 @@ def test_execute_file_action_uses_pythonw_for_py_files_on_windows(monkeypatch, t
 
     monkeypatch.setattr(actions.os, "name", "nt", raising=False)
     monkeypatch.setattr(actions, "_pythonw_executable", lambda: "pythonw.exe")
-    monkeypatch.setattr(actions, "_launch_process", lambda cmd: launched.append(cmd))
+    monkeypatch.setattr(actions, "_launch_process", lambda cmd, **kwargs: launched.append(cmd))
 
     asyncio.run(
         actions.execute_action(
@@ -161,6 +204,30 @@ def test_execute_file_action_uses_pythonw_for_py_files_on_windows(monkeypatch, t
 
     assert launched == [["pythonw.exe", str(script_path)]]
     assert logs and "Executed file" in logs[0]
+
+
+def test_execute_file_action_plays_audio_in_background_when_callback_provided(monkeypatch, tmp_path) -> None:
+    audio_path = tmp_path / "beep.mp3"
+    audio_path.write_bytes(b"ID3")
+
+    launched: list[list[str]] = []
+    handled: list[str] = []
+    logs: list[str] = []
+
+    monkeypatch.setattr(actions.os, "name", "nt", raising=False)
+    monkeypatch.setattr(actions, "_launch_windows_file_action", lambda _path: launched.append(["launch"]) or True)
+
+    asyncio.run(
+        actions.execute_action(
+            KeyAction(kind=actions.ACTION_FILE, value=str(audio_path)),
+            log=logs.append,
+            on_audio_file=lambda path, _volume=None: handled.append(str(path)) or True,
+        )
+    )
+
+    assert launched == []
+    assert handled and Path(handled[0]).name == "beep.mp3"
+    assert logs and logs[0].startswith("Playing audio:")
 
 
 def test_execute_volume_mixer_action(monkeypatch) -> None:
@@ -194,6 +261,25 @@ def test_execute_volume_mixer_action(monkeypatch) -> None:
 
     assert logs == ["Volume mixer: spotify.exe -> 55% (1 session)"]
     assert len(overlays) == 1
+
+
+def test_execute_change_profile_action_calls_handler() -> None:
+    logs: list[str] = []
+    received: list[object] = []
+
+    asyncio.run(
+        actions.execute_action(
+            KeyAction(kind=ACTION_CHANGE_PROFILE, value="mode=prev;step=2;min=1;max=4"),
+            log=logs.append,
+            on_change_profile=received.append,
+        )
+    )
+
+    assert len(received) == 1
+    spec = received[0]
+    assert getattr(spec, "mode", None) == "prev"
+    assert getattr(spec, "step", None) == 2
+    assert logs and logs[0].startswith("Change profile: mode=prev;step=2")
 
 
 def test_run_python_script_file_executes_main_and_captures_output(tmp_path) -> None:

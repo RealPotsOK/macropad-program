@@ -1,142 +1,176 @@
 # MacroPad Controller
 
-Tiny Python 3.11+ serial controller and Windows tray app for ATmega-based macropads.
+Desktop controller + CLI for an ATmega-based serial macropad.
 
-The board protocol is ASCII line-based and newline terminated (`\n`):
+- Python package name: `macropad`
+- GUI launcher: `macropad-controller`
+- Primary target: Windows 10/11 (cross-platform CLI where supported)
 
-- Board -> PC: `READY`, `SW=0`, `SW=1`, optional `LED=0`, `LED=1`, `KEY=row,col,state`, `ENC=+1/-1`
-- PC -> Board: `LED=0`, `LED=1`, `LED=T`
+## What It Does
 
-## Features
+- Connects to a serial macropad and parses board events (`KEY=`, `ENC=`, `ENC_SW=`, etc.).
+- Provides a Qt desktop app for key mapping, profiles, scripts, diagnostics, setup, and stats.
+- Supports action types like keyboard, file, volume mixer, profile changes, window control, and STEP blocks.
+- Supports Windows tray behavior and Windows packaging.
 
-- Serial port discovery with explicit `--port` or `--hint` matching
-- Windows GUI launcher: `macropad-controller`
-- Close-to-tray desktop behavior on Windows
-- Single background instance with restore-on-second-launch
-- Optional Windows autostart in hidden tray mode
-- User data stored in `%APPDATA%/macropad-ble`
-- Minimal commands:
-  - `macropad-ble list`
-  - `macropad-ble monitor`
-  - `macropad-ble gui`
-  - `macropad-ble listen`
-  - `macropad-ble led on|off|toggle`
-  - `macropad-ble status`
-- Optional switch duplicate filter (`dedupe_ms`, default 100ms)
-- Auto-reconnect in monitor mode (1s to 5s retry window)
-- Clean Ctrl+C shutdown
-- Optional debug logging of raw `RX`/`TX` lines (`--log debug`)
-- `gui` uses a dark-mode editor UI
-  - Key/action binding editor + script tab
-  - 10 profile slots with rename/import/export
-  - Serial `KEY` and `ENC` events reflected live
-  - Semi-dark gray key tiles (non-animated)
+## Serial Protocol (Current)
 
-## Install
+Line-based ASCII over UART (newline-terminated).
 
-```bash
-python -m venv .venv
-.venv/Scripts/python -m pip install -e .        # Windows PowerShell
-# or:
-.venv/bin/python -m pip install -e .            # Linux/macOS
+Examples:
+
+- Board -> PC:
+  - `READY`
+  - `KEY=0,1,1`
+  - `KEY=0,1,0`
+  - `ENC=+1`
+  - `ENC=-1`
+  - `ENC_SW=1`
+  - `ENC_SW=0`
+- PC -> Board:
+  - `TXT:Profile 2|Volume 75`
+  - `CLR`
+
+## Requirements
+
+- Python 3.11+
+- Windows 10/11 recommended for full feature set
+- Optional Windows-only integrations depend on:
+  - `pycaw`
+  - `winsdk`
+  - `keyboard`
+
+## Quick Start (Development)
+
+```powershell
+make dev
+make run
 ```
 
-Windows GUI entrypoint:
+If `make` is not installed on Windows, run the equivalent commands directly:
 
-```bash
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -e .[dev]
+.venv\Scripts\python.exe -m macropad.gui_app --port COM13 --baud 9600
+```
+
+Useful targets:
+
+- `make run` - launch GUI (`python -m macropad.gui_app`)
+- `make listen` - raw serial monitor + basic send controls
+- `make package` - build packaged Windows app (PyInstaller)
+- `make install` - install packaged app into `%LOCALAPPDATA%\MacroPad Controller`
+- `make uninstall` - remove installed packaged app/autostart entry
+- `make install-editable` - editable install without dev extras
+- `make help` - print all common targets
+
+## CLI Usage
+
+Find your port first (instead of hardcoding `COM13`):
+
+```powershell
+.venv/Scripts/python.exe -m macropad list
+```
+
+```powershell
+.venv/Scripts/python.exe -m macropad --port COM13 --baud 9600 list
+.venv/Scripts/python.exe -m macropad --port COM13 --baud 9600 monitor
+.venv/Scripts/python.exe -m macropad --port COM13 --baud 9600 listen
+.venv/Scripts/python.exe -m macropad --port COM13 --baud 9600 status
+.venv/Scripts/python.exe -m macropad --port COM13 --baud 9600 led on
+```
+
+Or installed script entrypoint:
+
+```powershell
+macropad --port COM13 --baud 9600 monitor
+```
+
+## GUI Usage
+
+```powershell
 macropad-controller
 macropad-controller --hidden
 ```
 
-When launched through `macropad-controller` on Windows:
+Tip: if `--port` is omitted, the app can still connect by `--hint` matching.
 
-- closing the window hides it to the system tray
-- tray menu exposes `Open`, `Reconnect`, `Launch on Windows startup`, and `Exit`
-- a second launch restores the running instance instead of creating another one
+## Configuration
 
-## Config
+Project/local config file name:
 
-Default config resolution when `--config` is not provided:
+- `macropad.toml`
 
-1. `./macropad-ble.toml`
-2. Windows: `%APPDATA%/macropad-ble/config.toml`
-3. macOS: `~/Library/Application Support/macropad-ble/config.toml`
-4. Linux: `${XDG_CONFIG_HOME:-~/.config}/macropad-ble/config.toml`
+Lookup order when `--config` is not provided:
+
+1. `./macropad.toml`
+2. `./macropad-ble.toml` (legacy)
+3. `%APPDATA%/macropad/config.toml`
+4. `%APPDATA%/macropad-ble/config.toml` (legacy)
 
 Example:
 
 ```toml
-port = ""
+port = "COM13"
 hint = "Curiosity"
-baud = 115200
+baud = 9600
 ack_timeout = 0.75
 dedupe_ms = 100
 log_level = "INFO"
 ```
 
-## Usage
+For minimal setup, only `port` and `baud` are usually required.
 
-```bash
-macropad-ble --hint Curiosity list
-macropad-ble --hint Curiosity monitor
-macropad-ble --hint Curiosity gui
-macropad-ble --hint Curiosity listen
-macropad-ble --hint Curiosity led on
-macropad-ble --hint Curiosity led off
-macropad-ble --hint Curiosity led toggle
-macropad-ble --hint Curiosity status
-macropad-controller --port COM13
+## Repository Layout
+
+```text
+src/macropad/              # App package
+  core/                    # Action/profile/step logic
+  serial/                  # Serial protocol + transport
+  qt/                      # PySide6 UI + controllers/services
+  commands/                # CLI command handlers
+scripts/                   # Packaging/install helper scripts
+tests/                     # Pytest test suite
+assets/                    # Icons/images
 ```
 
-`listen` prints every incoming serial line (`RX ...`) and accepts keyboard input:
+## Where Your Data Is
 
-- `1` -> send `LED=1`
-- `0` -> send `LED=0`
-- `q` -> quit
+Runtime user data is stored outside the repo in:
 
-`gui` key placement uses board row/col coordinates rendered in a 3x4 grid by default.
+- `%APPDATA%\macropad`
 
-You can always override discovery with an explicit port:
+That is where profiles/app state/runtime script files are read from when the desktop app runs.
 
-```bash
-macropad-ble --port COM12 monitor
+## Running Tests
+
+```powershell
+.venv/Scripts/python.exe -m pytest
 ```
 
-## Desktop App Data
+## Packaging (Windows)
 
-GUI profile/state data is stored under:
-
-- Windows: `%APPDATA%/macropad-ble`
-
-On first launch, the GUI migrates legacy local `./profiles` data into the new app-data location if the new location is still empty.
-
-## Windows Packaging
-
-Build a windowed packaged app:
-
-```bash
+```powershell
 make package
+make install
 ```
 
-Install the packaged app into `%LOCALAPPDATA%\MacroPad Controller` and enable autostart:
+Packaged app name:
 
-```bash
-make install-windows
+- `MacroPad Controller.exe`
+
+## GitHub Notes
+
+- `.gitignore` excludes local runtime data (`profiles/`), build artifacts, caches, and virtual envs.
+- If you already tracked generated files earlier, remove them from git index before first public push:
+
+```powershell
+git rm -r --cached dist build .venv profiles
+git commit -m "chore: stop tracking local/build artifacts"
 ```
 
-This also creates a Start menu shortcut named `MacroPad Controller`, so `Win`, type `MacroPad Controller`, `Enter` launches or restores it.
+## License
 
-Remove the installed app and its autostart entry:
-
-```bash
-make uninstall-windows
-```
-
-## Make Targets
-
-- `make dev` - create venv + install editable package with test deps
-- `make run` - launch the GUI app via `macropad_ble.gui_app`
-- `make listen`
-- `make package`
-- `make install-windows`
-- `make uninstall-windows`
+MIT. See [LICENSE](LICENSE).

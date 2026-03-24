@@ -1,4 +1,4 @@
-from macropad_ble.backoff import ExponentialBackoff
+from macropad.backoff import ExponentialBackoff
 
 
 def test_backoff_sequence_respects_cap() -> None:

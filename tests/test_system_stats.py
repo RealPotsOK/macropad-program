@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import macropad_ble.ui.window.system_stats as system_stats
+import macropad.core.system_stats as system_stats
 
 
 class _FakeProcess:

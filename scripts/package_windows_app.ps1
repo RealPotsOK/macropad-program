@@ -68,6 +68,78 @@ function Stop-MacroPadProcesses {
     }
 }
 
+function Stop-RepoPythonProcesses {
+    param(
+        [string]$RepoRoot
+    )
+
+    if (-not $RepoRoot) {
+        return
+    }
+
+    try {
+        $normalizedRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
+    } catch {
+        return
+    }
+
+    $targets = @()
+    foreach ($process in (Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        if ($process.Name -notin @("python.exe", "pythonw.exe")) {
+            continue
+        }
+        $commandLine = ""
+        if ($null -ne $process.CommandLine) {
+            $commandLine = [string]$process.CommandLine
+        }
+        $executablePath = ""
+        if ($null -ne $process.ExecutablePath) {
+            $executablePath = [string]$process.ExecutablePath
+        }
+        $matchesRoot = $false
+
+        if ($commandLine -and $commandLine.IndexOf($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            $matchesRoot = $true
+        } elseif ($executablePath) {
+            try {
+                $fullExe = [System.IO.Path]::GetFullPath($executablePath)
+                $venvScripts = Join-Path $normalizedRoot ".venv\Scripts"
+                if ($fullExe.StartsWith($venvScripts, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $matchesRoot = $true
+                }
+            } catch {
+                $matchesRoot = $false
+            }
+        }
+
+        if ($matchesRoot) {
+            $targets += $process
+        }
+    }
+
+    foreach ($process in $targets) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($targets) {
+        Start-Sleep -Milliseconds 800
+    }
+}
+
+function Ensure-PyInstaller {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PythonPath
+    )
+
+    & $PythonPath -c "import PyInstaller" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        return
+    }
+
+    Invoke-Checked -Command @($PythonPath, "-m", "pip", "install", "pyinstaller>=6.0")
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 if (-not $Python) {
     $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
@@ -81,11 +153,11 @@ if (-not $Python) {
 $distDir = Join-Path $repoRoot "dist"
 $sourceDir = Join-Path $distDir "MacroPad Controller"
 $workDir = Join-Path $env:TEMP ("MacroPadController-PyInstaller-" + [guid]::NewGuid().ToString("N"))
-$launcher = Join-Path $repoRoot "scripts\windows_gui_launcher.py"
-$srcDir = Join-Path $repoRoot "src"
+$specFile = Join-Path $repoRoot "MacroPad Controller.spec"
 $installDir = Join-Path $env:LOCALAPPDATA "MacroPad Controller"
 
 Stop-MacroPadProcesses -Roots @($sourceDir, $installDir)
+Stop-RepoPythonProcesses -RepoRoot $repoRoot
 
 if (Test-Path $sourceDir) {
     Remove-Item -Path $sourceDir -Recurse -Force
@@ -94,29 +166,18 @@ New-Item -Path $distDir -ItemType Directory -Force | Out-Null
 New-Item -Path $workDir -ItemType Directory -Force | Out-Null
 
 try {
-    Invoke-Checked -Command @($Python, "-m", "pip", "install", "-e", "${repoRoot}[build]")
+    Ensure-PyInstaller -PythonPath $Python
     Invoke-Checked -Command @(
         $Python,
         "-m",
         "PyInstaller",
         "--noconfirm",
-        "--windowed",
-        "--onedir",
-        "--name",
-        "MacroPad Controller",
+        "--clean",
         "--distpath",
         $distDir,
         "--workpath",
         $workDir,
-        "--paths",
-        $srcDir,
-        "--collect-submodules",
-        "comtypes",
-        "--collect-submodules",
-        "pycaw",
-        "--collect-submodules",
-        "winsdk",
-        $launcher
+        $specFile
     )
 } finally {
     if (Test-Path $workDir) {

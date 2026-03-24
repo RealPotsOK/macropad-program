@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from macropad_ble.ui.profile import Profile, create_default_profile, profile_from_dict, profile_to_dict, render_profile_oled_lines
+from macropad.core.profile import Profile, create_default_profile, profile_from_dict, profile_to_dict, render_profile_oled_lines
 
 
 def test_profile_oled_round_trip() -> None:

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from macropad_ble.ui.profile_images import (
+from macropad.core.profile_images import (
     ensure_image_dir,
     find_profile_image_path,
     load_profile_image_payload,

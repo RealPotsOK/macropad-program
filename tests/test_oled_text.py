@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-import macropad_ble.ui.oled_text as oled_text
-from macropad_ble.ui.profile import Profile
+import macropad.core.oled_text as oled_text
+from macropad.core.profile import Profile
 
 
 def test_description_template_for_label_preserves_custom_text() -> None:

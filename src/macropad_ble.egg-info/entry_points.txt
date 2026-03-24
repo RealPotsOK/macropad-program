@@ -1,6 +1,0 @@
-[console_scripts]
-macropad-ble = macropad_ble.cli:main
-macropad-ble-gradient = macropad_ble.pygame_continuous_ui:main
-
-[gui_scripts]
-macropad-controller = macropad_ble.gui_app:main

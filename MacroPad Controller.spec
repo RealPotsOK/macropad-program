@@ -1,17 +1,32 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
+import os
+from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+repo_root = Path(os.getcwd()).resolve()
+src_root = repo_root / "src"
+launcher = repo_root / "scripts" / "windows_gui_launcher.py"
+app_icon = repo_root / "assets" / "MP_Icon.ico"
+
+pyside_datas, pyside_binaries, pyside_hiddenimports = collect_all("PySide6")
+extra_datas = [
+    (str(repo_root / "assets" / "MP_Icon.png"), "assets"),
+    (str(repo_root / "assets" / "MP_Icon.ico"), "assets"),
+]
 hiddenimports = []
-hiddenimports += collect_submodules('comtypes')
-hiddenimports += collect_submodules('pycaw')
-hiddenimports += collect_submodules('winsdk')
-
+hiddenimports += pyside_hiddenimports
+hiddenimports += collect_submodules("qasync")
+hiddenimports += collect_submodules("shiboken6")
+hiddenimports += collect_submodules("comtypes")
+hiddenimports += collect_submodules("pycaw")
+hiddenimports += collect_submodules("winsdk")
 
 a = Analysis(
-    ['C:\\Users\\Main\\OneDrive\\Documents\\Project\\MacroPad\\scripts\\windows_gui_launcher.py'],
-    pathex=['C:\\Users\\Main\\OneDrive\\Documents\\Project\\MacroPad\\src'],
-    binaries=[],
-    datas=[],
+    [str(launcher)],
+    pathex=[str(src_root)],
+    binaries=pyside_binaries,
+    datas=pyside_datas + extra_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -27,7 +42,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='MacroPad Controller',
+    name="MacroPad Controller",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -38,6 +53,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(app_icon),
 )
 coll = COLLECT(
     exe,
@@ -46,5 +62,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='MacroPad Controller',
+    name="MacroPad Controller",
 )

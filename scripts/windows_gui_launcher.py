@@ -1,4 +1,4 @@
-from macropad_ble.gui_app import main
+from macropad.gui_app import main
 
 
 if __name__ == "__main__":

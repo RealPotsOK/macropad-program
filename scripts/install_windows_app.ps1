@@ -97,6 +97,7 @@ $exePath = Join-Path $installDir "MacroPad Controller.exe"
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 $shortcutPath = Join-Path $startMenuDir "MacroPad Controller.lnk"
+$iconPath = Join-Path $installDir "assets\MP_Icon.ico"
 
 Stop-MacroPadProcesses -Roots @($sourceDir, $installDir)
 
@@ -115,7 +116,11 @@ $shortcut = $wshShell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $exePath
 $shortcut.WorkingDirectory = $installDir
 $shortcut.Description = "MacroPad Controller"
-$shortcut.IconLocation = $exePath
+if (Test-Path $iconPath) {
+    $shortcut.IconLocation = "$iconPath,0"
+} else {
+    $shortcut.IconLocation = "$exePath,0"
+}
 $shortcut.Save()
 
 Write-Host "Installed MacroPad Controller to $installDir"

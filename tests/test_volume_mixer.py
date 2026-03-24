@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import macropad_ble.ui.volume_mixer as volume_mixer
+import macropad.core.volume_mixer as volume_mixer
 
 
 class _FakeProcess:

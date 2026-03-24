@@ -1,4 +1,4 @@
-from macropad_ble.cli import build_parser, cli_overrides_from_args
+from macropad.cli import build_parser, cli_overrides_from_args
 
 
 def test_parser_parses_list_command() -> None:

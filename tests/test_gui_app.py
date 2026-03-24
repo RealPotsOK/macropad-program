@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import macropad_ble.gui_app as gui_app
-from macropad_ble.config import Settings
+import macropad.gui_app as gui_app
+from macropad.config import Settings
 
 
 def test_gui_parser_accepts_hidden_flag() -> None:
@@ -46,7 +46,7 @@ def test_gui_main_passes_hidden_launch_to_run_gui(monkeypatch) -> None:
         def close(self) -> None:
             return None
 
-    async def fake_run_gui(settings: Settings, **kwargs) -> int:
+    def fake_run_gui(settings: Settings, **kwargs) -> int:
         captured["settings"] = settings
         captured.update(kwargs)
         return 0
