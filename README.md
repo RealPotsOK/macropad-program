@@ -177,27 +177,6 @@ That is where profiles/app state/runtime script files are read from when the des
 .venv/Scripts/python.exe -m pytest
 ```
 
-## Packaging (Windows)
-
-```powershell
-make package
-make install
-```
-
-Packaged app name:
-
-- `MacroPad Controller.exe`
-
-## GitHub Notes
-
-- `.gitignore` excludes local runtime data (`profiles/`), build artifacts, caches, and virtual envs.
-- If you already tracked generated files earlier, remove them from git index before first public push:
-
-```powershell
-git rm -r --cached dist build .venv profiles
-git commit -m "chore: stop tracking local/build artifacts"
-```
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
