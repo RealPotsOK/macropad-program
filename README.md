@@ -1,6 +1,6 @@
 # MacroPad Controller
 
-Desktop controller + CLI for an ATmega-based serial macropad.
+Desktop controller + CLI for serial macropads (ATmega, RP2040/Pico, and similar boards).
 
 - Python package name: `macropad`
 - GUI launcher: `macropad-controller`
@@ -12,6 +12,17 @@ Desktop controller + CLI for an ATmega-based serial macropad.
 - Provides a Qt desktop app for key mapping, profiles, scripts, diagnostics, setup, and stats.
 - Supports action types like keyboard, file, volume mixer, profile changes, window control, and STEP blocks.
 - Supports Windows tray behavior and Windows packaging.
+
+## Hardware Compatibility
+
+This app is **MCU-agnostic**. It works with any board if the board:
+
+- appears as a serial port
+- uses the selected baud rate
+- sends expected line formats
+- accepts expected command formats
+
+So yes, it can work with Raspberry Pi Pico firmware too, as long as that firmware speaks the same serial protocol.
 
 ## Serial Protocol (Current)
 
@@ -30,6 +41,11 @@ Examples:
 - PC -> Board:
   - `TXT:Profile 2|Volume 75`
   - `CLR`
+
+If your firmware uses different text tokens, update:
+
+- parser: `src/macropad/serial/events.py`
+- sender logic: `src/macropad/serial/board.py`
 
 ## Requirements
 
@@ -96,6 +112,13 @@ macropad-controller --hidden
 ```
 
 Tip: if `--port` is omitted, the app can still connect by `--hint` matching.
+
+## Setup "Learn" Scope
+
+The Setup page can learn/map which **physical board key** corresponds to which **virtual key tile** in the UI.
+
+It does **not** automatically learn brand-new serial message formats/protocols by itself.
+For new protocol tokens (example: different event names or payload shapes), update the parser code in `src/macropad/serial/events.py`.
 
 ## Configuration
 
