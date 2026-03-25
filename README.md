@@ -24,6 +24,15 @@ This app is **MCU-agnostic**. It works with any board if the board:
 
 So yes, it can work with Raspberry Pi Pico firmware too, as long as that firmware speaks the same serial protocol.
 
+Most board-specific behavior can be configured in the app (no code edits needed):
+
+- port/hint/baud connection settings
+- key rows/cols
+- board-key to virtual-key mapping (manual or learn/auto-setup)
+- encoder enabled + invert direction
+- screen enabled + output format (`prefix`, `line separator`, `end token`)
+- setup profiles (save/load different hardware mappings)
+
 ## Serial Protocol (Current)
 
 Line-based ASCII over UART (newline-terminated).
@@ -41,11 +50,6 @@ Examples:
 - PC -> Board:
   - `TXT:Profile 2|Volume 75`
   - `CLR`
-
-If your firmware uses different text tokens, update:
-
-- parser: `src/macropad/serial/events.py`
-- sender logic: `src/macropad/serial/board.py`
 
 ## Requirements
 
@@ -118,7 +122,7 @@ Tip: if `--port` is omitted, the app can still connect by `--hint` matching.
 The Setup page can learn/map which **physical board key** corresponds to which **virtual key tile** in the UI.
 
 It does **not** automatically learn brand-new serial message formats/protocols by itself.
-For new protocol tokens (example: different event names or payload shapes), update the parser code in `src/macropad/serial/events.py`.
+If your firmware uses different incoming event tokens/payload shapes (not `KEY=...`, `ENC=...`, etc.), code updates are still required.
 
 ## Configuration
 
